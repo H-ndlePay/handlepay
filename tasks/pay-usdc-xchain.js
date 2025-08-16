@@ -67,8 +67,8 @@ const MESSAGE_TRANSMITTER_V2 = '0x81D40F21F12A8F0E3252Bccb954D722d4c464B64';
 
 // Hard-coded HookReceiver per destination chain
 const DST_HOOK = {
-  ethereum: '0x0A633c0CC155531875Aa7EEBa176304DD160F191',
-  base: '0xA9A04b6dc906B21fAD07c623fba31730a8E6404a',
+  ethereum: '0x26447a80c4F6b74AC77Fb14Da30b45a9D8fc0662',
+  base: '0x1f184E5CC0EDE2eFd67a3cE51dB1347A2C3dC1c8',
   // add more if needed
 };
 
