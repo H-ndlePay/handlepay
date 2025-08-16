@@ -1,16 +1,13 @@
-// src/App.jsx
 import React from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import {
-  DynamicContextProvider,
-  DynamicWidget,
-} from "@dynamic-labs/sdk-react-core";
+
+import { DynamicContextProvider } from "@dynamic-labs/sdk-react-core";
 import { EthereumWalletConnectors } from "@dynamic-labs/ethereum";
 import { DynamicWagmiConnector } from "@dynamic-labs/wagmi-connector";
 
 import { createConfig, WagmiProvider } from "wagmi";
 import { http } from "viem";
-import { mainnet } from "viem/chains";
+import { mainnet, base } from "viem/chains"; // ⬅ add baseSepolia
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import Nav from "./components/Nav.jsx";
@@ -18,9 +15,12 @@ import UsersPage from "./pages/UsersPage.jsx";
 import PaymentsPage from "./pages/PaymentsPage.jsx";
 
 const wagmiConfig = createConfig({
-  chains: [mainnet],
+  chains: [mainnet, base], // ⬅ include all chains you’ll use
   multiInjectedProviderDiscovery: false,
-  transports: { [mainnet.id]: http() },
+  transports: {
+    [mainnet.id]: http(),
+    [base.id]: http(),
+  },
 });
 
 const queryClient = new QueryClient();
