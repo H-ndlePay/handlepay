@@ -1,0 +1,38 @@
+type HandleAdded @entity(immutable: true) {
+  id: Bytes!
+  memberId: BigInt! # uint256
+  platform: String! # string
+  username: String! # string
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type MemberCreated @entity(immutable: true) {
+  id: Bytes!
+  memberId: BigInt! # uint256
+  wallet: Bytes! # address
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type OwnershipTransferred @entity(immutable: true) {
+  id: Bytes!
+  previousOwner: Bytes! # address
+  newOwner: Bytes! # address
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type PaymentSent @entity(immutable: true) {
+  id: Bytes!
+  platform: String! # string
+  username: String! # string
+  from: Bytes! # address
+  amount: BigInt! # uint256
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}

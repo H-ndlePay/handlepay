@@ -1,0 +1,35 @@
+specVersion: 1.3.0
+indexerHints:
+  prune: auto
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: HandleRegistry
+    network: base
+    source:
+      address: "0x132727D74dF3246b64046598626415258dc648f0"
+      abi: HandleRegistry
+      startBlock: 34283304
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - HandleAdded
+        - MemberCreated
+        - OwnershipTransferred
+        - PaymentSent
+      abis:
+        - name: HandleRegistry
+          file: ./abis/HandleRegistry.json
+      eventHandlers:
+        - event: HandleAdded(indexed uint256,string,string)
+          handler: handleHandleAdded
+        - event: MemberCreated(indexed uint256,address)
+          handler: handleMemberCreated
+        - event: OwnershipTransferred(indexed address,indexed address)
+          handler: handleOwnershipTransferred
+        - event: PaymentSent(string,string,address,uint256)
+          handler: handlePaymentSent
+      file: ./src/handle-registry.ts
