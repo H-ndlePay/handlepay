@@ -5775,7 +5775,14 @@ graceful-fs@^4.1.11, graceful-fs@^4.1.3, graceful-fs@^4.1.6, graceful-fs@^4.2.0,
   resolved "https://registry.yarnpkg.com/graceful-fs/-/graceful-fs-4.2.11.tgz#4183e4e8bf08bb6e05bbb2f7d2e0c8f712ca40e3"
   integrity sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==
 
-"graphql@^15.5.0 || ^16.0.0 || ^17.0.0", graphql@^16.9.0:
+graphql-request@^7.2.0:
+  version "7.2.0"
+  resolved "https://registry.yarnpkg.com/graphql-request/-/graphql-request-7.2.0.tgz#af4aa25f27a087dd4fc93a4ff54a0f59c4487269"
+  integrity sha512-0GR7eQHBFYz372u9lxS16cOtEekFlZYB2qOyq8wDvzRmdRSJ0mgUVX1tzNcIzk3G+4NY+mGtSz411wZdeDF/+A==
+  dependencies:
+    "@graphql-typed-document-node/core" "^3.2.0"
+
+"graphql@^15.5.0 || ^16.0.0 || ^17.0.0", graphql@^16.11.0, graphql@^16.9.0:
   version "16.11.0"
   resolved "https://registry.yarnpkg.com/graphql/-/graphql-16.11.0.tgz#96d17f66370678027fdf59b2d4c20b4efaa8a633"
   integrity sha512-mS1lbMsxgQj6hge1XZ6p7GPhbrtFwUFYi3wRzXAC/FmYnyXMTvvI3td3rjmQ2u8ewXueaSvRPWaEcgVVOT9Jnw==
