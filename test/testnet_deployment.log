@@ -1,0 +1,8 @@
+$ # Run the deployment locally
+npx hardhat run scripts/deploy.js
+[dotenv@17.2.1] injecting env (3) from .env -- tip: 📡 version env with Radar: https://dotenvx.com/radar
+[dotenv@17.2.1] injecting env (0) from .env -- tip: ⚙️  enable debug logging with { debug: true }
+Deploying HandleRegistry with account: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+Account balance: 10000.0 ETH
+HandleRegistry deployed to: 0x5FbDB2315678afecb367f032d93F642f64180aa3
+Deployment info saved to deployments/hardhat.json

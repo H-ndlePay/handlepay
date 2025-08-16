@@ -1,0 +1,7 @@
+npx hardhat run scripts/deploy.js --network base
+[dotenv@17.2.1] injecting env (3) from .env -- tip: 📡 observe env with Radar: https://dotenvx.com/radar
+[dotenv@17.2.1] injecting env (0) from .env -- tip: 🔐 encrypt with Dotenvx: https://dotenvx.com
+Deploying HandleRegistry with account: 0x852CA1bd591050F075f9c5dD1B3ad3DF402C076E
+Account balance: 0.02973275406589846 ETH
+HandleRegistry deployed to: 0x132727D74dF3246b64046598626415258dc648f0
+Deployment info saved to deployments/base.json
