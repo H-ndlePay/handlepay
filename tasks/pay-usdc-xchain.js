@@ -1,9 +1,8 @@
 // tasks/pay-usdc-xchain.js
-const {task} = require('hardhat/config');
+const { task } = require('hardhat/config');
 
 // Node 18+ has global fetch
-if (typeof fetch !== 'function')
-  throw new Error('Node 18+ required (global fetch)');
+if (typeof fetch !== 'function') throw new Error('Node 18+ required (global fetch)');
 
 const IERC20_ABI = [
   'function decimals() view returns (uint8)',
@@ -17,7 +16,9 @@ const REG_ABI = [
 ];
 
 const TOKEN_MESSENGER_V2_ABI = [
+  // v2 (with hooks + finality)
   'function depositForBurn(uint256 amount,uint32 destinationDomain,bytes32 mintRecipient,address burnToken,bytes32 destinationCaller,uint256 maxFee,uint32 minFinalityThreshold) external',
+  'function depositForBurnWithHook(uint256 amount,uint32 destinationDomain,bytes32 mintRecipient,address burnToken,bytes32 destinationCaller,uint256 maxFee,uint32 minFinalityThreshold,bytes hookData) external',
 ];
 
 const MESSAGE_TRANSMITTER_V2_ABI = [
@@ -28,10 +29,10 @@ const MESSAGE_TRANSMITTER_V2_ABI = [
 const DOMAINS = {
   ethereum: 0,
   avalanche: 1,
-  op: 2,  // Optimism
+  op: 2,         // Optimism
   arbitrum: 3,
   base: 6,
-  polygon: 7,  // PoS
+  polygon: 7,    // PoS
   linea: 11,
 };
 
@@ -48,174 +49,158 @@ const DEFAULT_RPCS = {
 
 // USDC mainnet addresses
 const USDC = {
-  ethereum: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',  // lowercase to avoid
-                                                           // checksum error
-  base: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+  ethereum: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', // lowercase to avoid checksum error
+  base:     '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
   arbitrum: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
-  op: '0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85',
-  polygon: '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359',
-  avalanche: '0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E',
-  linea: '0x176211869cA2b568f2A7D4EE941E073a821EE1ff',
+  op:       '0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85',
+  polygon:  '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359',
+  avalanche:'0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E',
+  linea:    '0x176211869cA2b568f2A7D4EE941E073a821EE1ff',
 };
 
-// TokenMessengerV2 (same on EVM chains as of now)
+// TokenMessengerV2 (same on all listed EVM chains)
 const TOKEN_MESSENGER_V2 = '0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d';
 
-// MessageTransmitterV2 is **chain-specific**
-const TRANSMITTER_V2 = {
-  ethereum: '0x0a992d191DEeC32aFe36203Ad87D7d289a738F81',
-  base: '0xAD09780d193884d503182aD4588450C416D6F9D4',
-  // add more if you expand to other chains
-};
+// MessageTransmitterV2 (same on all listed EVM chains)
+const MESSAGE_TRANSMITTER_V2 = '0x81D40F21F12A8F0E3252Bccb954D722d4c464B64';
 
-function requireKey(k, msg) {
-  if (!k) throw new Error(msg);
-  return k;
-}
+function requireKey(k, msg) { if (!k) throw new Error(msg); return k; }
 
-task(
-    'pay-usdc-xchain',
-    'Cross-chain USDC to a @handle via CCTP v2 Fast Transfer')
-    .addParam(
-        'src',
-        'source chain key (ethereum|base|arbitrum|op|polygon|avalanche|linea)')
-    .addParam('dst', 'destination chain key (same keys)')
-    .addParam('amount', 'USDC amount like 12.34')
-    .addOptionalParam('platform', 'handle platform (e.g. twitter)')
-    .addOptionalParam('username', 'handle username (e.g. Cookiestroke)')
-    .addOptionalParam('to', 'recipient address (skip handle lookup)')
-    .addOptionalParam(
-        'registry', 'HandleRegistry on Base (for lookup)',
-        '0x132727D74dF3246b64046598626415258dc648f0')
-    .addOptionalParam(
-        'resolveRpc', 'RPC used for handle lookup (default Base)',
-        'https://mainnet.base.org')
-    .addOptionalParam('pk', 'Private key (hex, no 0x)')
-    .addOptionalParam('minFinality', '1000 (Fast) or 2000 (Standard)', '1000')
-    .addOptionalParam('srcRpc', 'Override source RPC')
-    .addOptionalParam('dstRpc', 'Override destination RPC')
-    .addOptionalParam('tx', 'existing burn tx hash (resume mint)')
-    .setAction(async (args, hre) => {
-      const {ethers} = hre;
+task('pay-usdc-xchain', 'Cross-chain USDC to a @handle via CCTP v2 Fast Transfer (Hooks by default)')
+  .addParam('src', 'source chain key (ethereum|base|arbitrum|op|polygon|avalanche|linea)')
+  .addParam('dst', 'destination chain key (same keys)')
+  .addParam('amount', 'USDC amount like 12.34')
+  .addOptionalParam('platform', 'handle platform (e.g. twitter)')
+  .addOptionalParam('username', 'handle username (e.g. Cookiestroke)')
+  .addOptionalParam('to', 'recipient address (skip handle lookup)')
+  .addOptionalParam('registry', 'HandleRegistry on Base (for lookup)', '0x132727D74dF3246b64046598626415258dc648f0')
+  .addOptionalParam('resolveRpc', 'RPC used for handle lookup (default Base)', 'https://mainnet.base.org')
+  .addOptionalParam('pk', 'Private key (hex, no 0x)')
+  .addOptionalParam('minFinality', '1000 (Fast) or 2000 (Standard)', '1000')
+  .addOptionalParam('srcRpc', 'Override source RPC')
+  .addOptionalParam('dstRpc', 'Override destination RPC')
+  .addOptionalParam('tx', 'existing burn tx hash (resume mint)')
+  .addOptionalParam('hookData', '0x… bytes for CCTP v2 hook payload (default 0x)')
+  .addFlag('noHook', 'Use classic depositForBurn (no hook); default is withHook')
+  .setAction(async (args, hre) => {
+    const { ethers } = hre;
 
-      const srcKey = args.src.toLowerCase();
-      const dstKey = args.dst.toLowerCase();
-      const srcDomain = DOMAINS[srcKey];
-      const dstDomain = DOMAINS[dstKey];
-      requireKey(srcDomain !== undefined, 'Unsupported --src');
-      requireKey(dstDomain !== undefined, 'Unsupported --dst');
+    const srcKey = args.src.toLowerCase();
+    const dstKey = args.dst.toLowerCase();
+    const srcDomain = DOMAINS[srcKey];
+    const dstDomain = DOMAINS[dstKey];
+    requireKey(srcDomain !== undefined, 'Unsupported --src');
+    requireKey(dstDomain !== undefined, 'Unsupported --dst');
 
-      const srcRpc = args.srcRpc || DEFAULT_RPCS[srcKey];
-      const dstRpc = args.dstRpc || DEFAULT_RPCS[dstKey];
-      requireKey(srcRpc, `No default RPC for src=${srcKey}, pass --srcRpc`);
-      requireKey(dstRpc, `No default RPC for dst=${dstKey}, pass --dstRpc`);
+    const srcRpc = args.srcRpc || DEFAULT_RPCS[srcKey];
+    const dstRpc = args.dstRpc || DEFAULT_RPCS[dstKey];
+    requireKey(srcRpc, `No default RPC for src=${srcKey}, pass --srcRpc`);
+    requireKey(dstRpc, `No default RPC for dst=${dstKey}, pass --dstRpc`);
 
-      const usdcSrc = ethers.getAddress(USDC[srcKey]);
-      requireKey(usdcSrc, `USDC not mapped for ${srcKey}`);
+    const usdcSrc = ethers.getAddress(USDC[srcKey]);
+    requireKey(usdcSrc, `USDC not mapped for ${srcKey}`);
 
-      const transmitterAddr = TRANSMITTER_V2[dstKey];
-      requireKey(transmitterAddr, `No MessageTransmitterV2 for dst=${dstKey}`);
+    const srcProvider = new ethers.JsonRpcProvider(srcRpc);
+    const dstProvider = new ethers.JsonRpcProvider(dstRpc);
 
-      const srcProvider = new ethers.JsonRpcProvider(srcRpc);
-      const dstProvider = new ethers.JsonRpcProvider(dstRpc);
+    const signer = args.pk ? new ethers.Wallet('0x' + args.pk) : (await ethers.getSigners())[0];
+    const srcSigner = signer.connect(srcProvider);
+    const dstSigner = signer.connect(dstProvider);
 
-      const signer = args.pk ? new ethers.Wallet('0x' + args.pk) :
-                               (await ethers.getSigners())[0];
-      const srcSigner = signer.connect(srcProvider);
-      const dstSigner = signer.connect(dstProvider);
+    // 1) Resolve recipient
+    let recipient = args.to;
+    if (!recipient) {
+      requireKey(args.platform, 'Provide --to or --platform+--username');
+      requireKey(args.username, 'Provide --to or --platform+--username');
+      const resolveProvider = new ethers.JsonRpcProvider(args.resolveRpc);
+      const reg = new ethers.Contract(args.registry, REG_ABI, resolveProvider);
+      const member = await reg.getMemberByHandle(args.platform, args.username);
+      if (!member.isActive) throw new Error('Member not active');
+      recipient = member.wallet;
+    }
+    console.log(`Recipient on ${dstKey}: ${recipient}`);
 
-      // 1) Resolve recipient
-      let recipient = args.to;
-      if (!recipient) {
-        requireKey(args.platform, 'Provide --to or --platform+--username');
-        requireKey(args.username, 'Provide --to or --platform+--username');
-        const resolveProvider = new ethers.JsonRpcProvider(args.resolveRpc);
-        const reg =
-            new ethers.Contract(args.registry, REG_ABI, resolveProvider);
-        const member =
-            await reg.getMemberByHandle(args.platform, args.username);
-        if (!member.isActive) throw new Error('Member not active');
-        recipient = member.wallet;
+    // 2) Amount & contracts
+    const usdc = new ethers.Contract(usdcSrc, IERC20_ABI, srcSigner);
+    const dec = await usdc.decimals();
+    const amount = ethers.parseUnits(args.amount, dec);
+
+    const messenger = new ethers.Contract(TOKEN_MESSENGER_V2, TOKEN_MESSENGER_V2_ABI, srcSigner);
+    const transmitter = new ethers.Contract(MESSAGE_TRANSMITTER_V2, MESSAGE_TRANSMITTER_V2_ABI, dstSigner);
+
+    // 3) Fresh burn or resume?
+    let burnTxHash = args.tx;
+    if (!burnTxHash) {
+      // Fee for v2
+      const feeUrl = `https://iris-api.circle.com/v2/burn/USDC/fees/${srcDomain}/${dstDomain}`;
+      const feeRes = await fetch(feeUrl);
+      if (!feeRes.ok) throw new Error(`Fee API failed: ${feeRes.status}`);
+      const feeJson = await feeRes.json();
+      const minFeeBps = BigInt(feeJson?.data?.minimumFee ?? 0n);
+      const maxFee = (amount * minFeeBps) / 10000n;
+      const minFinality = parseInt(args.minFinality || '1000', 10); // 1000=Fast, >1000=2000
+
+      console.log(`minFeeBps=${minFeeBps} → maxFee=${maxFee.toString()} (minFinality=${minFinality})`);
+
+      // Approve if needed
+      const owner = await srcSigner.getAddress();
+      const allowance = await usdc.allowance(owner, TOKEN_MESSENGER_V2);
+      if (allowance < amount) {
+        console.log('Approving USDC to TokenMessengerV2…');
+        const txA = await usdc.approve(TOKEN_MESSENGER_V2, amount);
+        console.log('approve tx:', txA.hash);
+        await txA.wait();
       }
-      console.log(`Recipient on ${dstKey}: ${recipient}`);
 
-      // 2) Amount & contracts
-      const usdc = new ethers.Contract(usdcSrc, IERC20_ABI, srcSigner);
-      const dec = await usdc.decimals();
-      const amount = ethers.parseUnits(args.amount, dec);
-      const messenger = new ethers.Contract(
-          TOKEN_MESSENGER_V2, TOKEN_MESSENGER_V2_ABI, srcSigner);
-      const transmitter = new ethers.Contract(
-          transmitterAddr, MESSAGE_TRANSMITTER_V2_ABI, dstSigner);
+      // deposit (Hooks by default)
+      const mintRecipient32 = ethers.zeroPadValue(recipient, 32);
+      const destinationCaller = ethers.ZeroHash; // anyone can call receiveMessage
+      const hookData = args.noHook ? '0x' : (args.hookData || '0x');
 
-      // 3) If we're doing a fresh burn, compute fee and burn; else resume
-      let burnTxHash = args.tx;
-      if (!burnTxHash) {
-        // Fee via Circle fees API (burn → mint)
-        const feeUrl = `https://iris-api.circle.com/v2/burn/USDC/fees/${
-            srcDomain}/${dstDomain}`;
-        const feeRes = await fetch(feeUrl);
-        if (!feeRes.ok) throw new Error(`Fee API failed: ${feeRes.status}`);
-        const feeJson = await feeRes.json();
-        const minFeeBps = BigInt(feeJson?.data?.minimumFee ?? 0n);
-        const maxFee = (amount * minFeeBps) / 10000n;
-        const minFinality =
-            parseInt(args.minFinality || '1000', 10);  // 1000 = Fast
-        console.log(`minFeeBps=${minFeeBps} → maxFee=${
-            maxFee.toString()} (minFinality=${minFinality})`);
-
-        // Approve if needed
-        const owner = await srcSigner.getAddress();
-        const allowance = await usdc.allowance(owner, TOKEN_MESSENGER_V2);
-        if (allowance < amount) {
-          console.log('Approving USDC to TokenMessengerV2…');
-          const txA = await usdc.approve(TOKEN_MESSENGER_V2, amount);
-          console.log('approve tx:', txA.hash);
-          await txA.wait();
-        }
-
-        // depositForBurn (destinationCaller = ZeroHash so anyone can submit)
-        const mintRecipient32 = ethers.zeroPadValue(recipient, 32);
+      let txB;
+      if (args.noHook) {
         console.log('depositForBurn…');
-        const txB = await messenger.depositForBurn(
-            amount, dstDomain, mintRecipient32, usdcSrc, ethers.ZeroHash,
-            maxFee, minFinality);
-        console.log('burn tx:', txB.hash);
-        await txB.wait();
-        burnTxHash = txB.hash;
-        console.log('burn mined');
+        txB = await messenger.depositForBurn(
+          amount, dstDomain, mintRecipient32, usdcSrc, destinationCaller, maxFee, minFinality
+        );
       } else {
-        console.log('Resuming with existing burn tx:', burnTxHash);
+        console.log(`depositForBurnWithHook (hookData len=${(hookData.length - 2) / 2} bytes)…`);
+        txB = await messenger.depositForBurnWithHook(
+          amount, dstDomain, mintRecipient32, usdcSrc, destinationCaller, maxFee, minFinality, hookData
+        );
       }
+      console.log('burn tx:', txB.hash);
+      await txB.wait();
+      burnTxHash = txB.hash;
+      console.log('burn mined');
+    } else {
+      console.log('Resuming with existing burn tx:', burnTxHash);
+    }
 
-      // 4) Poll attestation + message
-      const pollUrl = `https://iris-api.circle.com/v2/messages/${
-          srcDomain}?transactionHash=${burnTxHash}`;
-      console.log('Fetching attestation…');
-      let message, attestation;
-      for (let i = 0; i < 120; i++) {  // up to ~6 minutes
-        const r = await fetch(pollUrl);
-        const j = await r.json();
-        const m = (j.messages || [])[0];
-        if (m && m.attestation && m.attestation !== 'PENDING' && m.message &&
-            m.message !== '0x') {
-          message = m.message;
-          attestation = '0x' + m.attestation.replace(/^0x/, '');
-          break;
-        }
-        await new Promise((res) => setTimeout(res, 3000));
+    // 4) Poll attestation + message (no custom timeout logic per your request)
+    const pollUrl = `https://iris-api.circle.com/v2/messages/${srcDomain}?transactionHash=${burnTxHash}`;
+    console.log('Fetching attestation…');
+    let message, attestation;
+    for (let i = 0; i < 120; i++) { // ~6 min simple cap
+      const r = await fetch(pollUrl);
+      const j = await r.json();
+      const m = (j.messages || [])[0];
+      if (m && m.attestation && m.attestation !== 'PENDING' && m.message && m.message !== '0x') {
+        message = m.message;
+        attestation = '0x' + m.attestation.replace(/^0x/, '');
+        break;
       }
-      if (!message || !attestation) {
-        throw new Error(`Timed out waiting for attestation. Re-run with --tx ${
-            burnTxHash} to resume.`);
-      }
-      console.log('attestation OK');
+      await new Promise((res) => setTimeout(res, 3000));
+    }
+    if (!message || !attestation) {
+      throw new Error(`Timed out waiting for attestation. Re-run with --tx ${burnTxHash} to resume.`);
+    }
+    console.log('attestation OK');
 
-      // 5) receiveMessage on destination
-      console.log('receiveMessage on destination…');
-      const txM = await transmitter.receiveMessage(message, attestation);
-      console.log('mint tx:', txM.hash);
-      const rcptM = await txM.wait();
-      console.log(`✅ Minted ${args.amount} USDC on ${dstKey} in block ${
-          rcptM.blockNumber}`);
-    });
+    // 5) receiveMessage on destination
+    console.log('receiveMessage on destination…');
+    const txM = await transmitter.receiveMessage(message, attestation);
+    console.log('mint tx:', txM.hash);
+    const rcptM = await txM.wait();
+    console.log(`✅ Minted ${args.amount} USDC on ${dstKey} in block ${rcptM.blockNumber}`);
+  });
