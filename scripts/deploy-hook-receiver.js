@@ -1,15 +1,17 @@
-const { ethers } = require("hardhat");
-
-const MESSAGE_TRANSMITTER_V2 = "0x81D40F21F12A8F0E3252Bccb954D722d4c464B64";
+// scripts/deploy-hook-receiver.js
+const hre = require("hardhat");
 
 async function main() {
-  const [deployer] = await ethers.getSigners();
+  const [deployer] = await hre.ethers.getSigners();
   console.log("Deployer:", deployer.address);
 
-  const F = await ethers.getContractFactory("HandlePayHookReceiver");
-  const c = await F.deploy(MESSAGE_TRANSMITTER_V2);
-  await c.waitForDeployment();
-  console.log("HandlePayHookReceiver:", await c.getAddress());
+  // Correct MessageTransmitterV2 for mainnet/v2 (same on Base, Ethereum, etc.)
+  const MTV2 = "0xec546b6B005471ECf012e5aF77FBeC07e0FD8f78";
+
+  const F = await hre.ethers.getContractFactory("HandlePayHookReceiver");
+  const r = await F.deploy(MTV2);
+  await r.waitForDeployment();
+  console.log("HandlePayHookReceiver:", await r.getAddress());
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+main().catch(console.error);

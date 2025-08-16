@@ -33,3 +33,24 @@ dataSources:
         - event: PaymentSent(string,string,address,uint256)
           handler: handlePaymentSent
       file: ./src/handle-registry.ts
+
+  - kind: ethereum/contract
+    name: HandlePayHookReceiver
+    network: base
+    source:
+      address: "0x26447a80c4F6b74AC77Fb14Da30b45a9D8fc0662" # your Base receiver
+      abi: HandlePayHookReceiver
+      startBlock:  # <-- put the deploy block number (from Basescan)
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - USDCHandlePayment
+      abis:
+        - name: HandlePayHookReceiver
+          file: abis/HandlePayHookReceiver.json
+      eventHandlers:
+        - event: USDCHandlePayment(uint32,uint32,address,address,address,uint256,string,string,bytes,bytes32)
+          handler: handleUSDCHandlePayment
+      file: src/handlePayHookReceiver.ts

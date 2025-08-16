@@ -36,3 +36,20 @@ type PaymentSent @entity(immutable: true) {
   blockTimestamp: BigInt!
   transactionHash: Bytes!
 }
+
+type USDCHandlePayment @entity(immutable: true) {
+  id: Bytes!
+  sourceDomain: Int!
+  destinationDomain: Int!
+  sender: Bytes!
+  recipient: Bytes!
+  burnToken: Bytes!
+  amount: BigInt!
+  platform: String!
+  username: String!
+  hookData: Bytes!
+  nonce: Bytes!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
