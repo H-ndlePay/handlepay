@@ -1,0 +1,8 @@
+# lz-messaging-min build + secrets
+/lz-messaging-min/node_modules/
+/lz-messaging-min/artifacts/
+/lz-messaging-min/cache/
+/lz-messaging-min/typechain-types/
+/lz-messaging-min/deployments/
+/lz-messaging-min/.env
+/lz-messaging-min/.env.local

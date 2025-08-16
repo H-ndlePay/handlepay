@@ -1,0 +1,33 @@
+{
+  "name": "lz-messaging-min",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "compile": "pnpm exec hardhat compile",
+    "deploy:sepolia": "pnpm exec hardhat deploy --tags Ping --network sepolia",
+    "deploy:base": "pnpm exec hardhat deploy --tags Ping --network base-sepolia",
+    "setpeer:sepolia": "pnpm exec hardhat deploy --tags SetPeer --network sepolia",
+    "setpeer:base": "pnpm exec hardhat deploy --tags SetPeer --network base-sepolia",
+    "ping:sepolia->base": "pnpm exec hardhat run scripts/sendPing.ts --network sepolia -- base",
+    "ping:base->sepolia": "pnpm exec hardhat run scripts/sendPing.ts --network base-sepolia -- eth"
+  },
+  "devDependencies": {
+    "@layerzerolabs/lz-definitions": "^3",
+    "@layerzerolabs/lz-evm-messagelib-v2": "3.0.125",
+    "@layerzerolabs/lz-evm-protocol-v2": "3.0.125",
+    "@layerzerolabs/oapp-evm": "0.3.2",
+    "@layerzerolabs/toolbox-hardhat": "0.6.12",
+    "@nomiclabs/hardhat-ethers": "2.2.3",
+    "@openzeppelin/contracts": "4.9.6",
+    "@typechain/ethers-v5": "11.1.2",
+    "@typechain/hardhat": "9.1.0",
+    "dotenv": "16.4.5",
+    "ethers": "5.7.2",
+    "hardhat": "2.26.3",
+    "hardhat-deploy": "0.12.4",
+    "solidity-bytes-utils": "^0.8.4",
+    "ts-node": "10.9.2",
+    "typechain": "8.3.2"
+  }
+}
