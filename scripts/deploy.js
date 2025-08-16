@@ -5,23 +5,29 @@ async function main() {
   const [deployer] = await hre.ethers.getSigners();
   
   console.log("Deploying HandleRegistry with account:", deployer.address);
-  console.log("Account balance:", (await deployer.getBalance()).toString());
+  
+  // Fix: Use provider to get balance
+  const balance = await hre.ethers.provider.getBalance(deployer.address);
+  console.log("Account balance:", hre.ethers.formatEther(balance), "ETH");
   
   const HandleRegistry = await hre.ethers.getContractFactory("HandleRegistry");
   const registry = await HandleRegistry.deploy(deployer.address);
   
-  await registry.deployed();
+  // Fix: Wait for deployment
+  await registry.waitForDeployment();
   
-  console.log("HandleRegistry deployed to:", registry.address);
+  // Fix: Get the address properly
+  const address = await registry.getAddress();
+  
+  console.log("HandleRegistry deployed to:", address);
   
   // Save deployment info
   const network = hre.network.name;
   const deploymentInfo = {
     network: network,
-    address: registry.address,
+    address: address,
     deployer: deployer.address,
     timestamp: new Date().toISOString(),
-    blockNumber: registry.deployTransaction.blockNumber
   };
   
   if (!fs.existsSync("deployments")) {
