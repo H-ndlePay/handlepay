@@ -59,6 +59,7 @@ contract HandlePayHookReceiver {
     (
       uint32 burnMsgVersion,
       bytes32 burnTokenB32,
+      bytes32 mintRecipientAgainB32,
       uint256 amount,
       /* bytes32 messageSenderAgainB32 */,
       /* uint256 maxFee */,
@@ -67,10 +68,10 @@ contract HandlePayHookReceiver {
       bytes memory hookData
     ) = abi.decode(
       body,
-      (uint32,bytes32,uint256,bytes32,uint256,uint256,uint256,bytes)
+      (uint32,bytes32,bytes32,uint256,bytes32,uint256,uint256,uint256,bytes)
     );
     require(burnMsgVersion == 1, "Not burn v2");
-
+    require(mintRecipientAgainB32 == mintRecipientB32, "recipient mismatch");
     // Best-effort parse of our suggested hook schema.
     // Use an external self-call so we can try/catch decode failures.
     (string memory platform, string memory username) = ("", "");
