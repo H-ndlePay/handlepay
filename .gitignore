@@ -12,3 +12,7 @@ lz-messaging-min/typechain-types/
 lz-messaging-min/deployments/
 lz-messaging-min/node_modules/
 lz-messaging-min/.env
+
+# Local env files
+.env
+**/.env
