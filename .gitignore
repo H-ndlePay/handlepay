@@ -6,3 +6,9 @@
 /lz-messaging-min/deployments/
 /lz-messaging-min/.env
 /lz-messaging-min/.env.local
+lz-messaging-min/artifacts/
+lz-messaging-min/cache/
+lz-messaging-min/typechain-types/
+lz-messaging-min/deployments/
+lz-messaging-min/node_modules/
+lz-messaging-min/.env
