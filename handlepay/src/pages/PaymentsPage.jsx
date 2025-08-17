@@ -62,10 +62,12 @@ const HANDLE_REGISTRY_ABI = [
   },
 ];
 
-/* Handle types */
+/* Handle types — now includes Discord & Instagram */
 const HANDLE_TYPES = [
-  { key: "twitter",  label: "Twitter" },
-  { key: "telegram", label: "Telegram" },
+  { key: "twitter",   label: "Twitter"   },
+  { key: "telegram",  label: "Telegram"  },
+  { key: "discord",   label: "Discord"   },
+  { key: "instagram", label: "Instagram" },
 ];
 
 /* Graph queries (case-insensitive via username_in) */
@@ -151,7 +153,7 @@ export default function PaymentsPage() {
   const resolveHandleToWallet = useCallback(async (platformKey, rawHandle) => {
     const platform = (platformKey || "").toLowerCase().trim();
     if (!platform) return null;
-    const p = platform === "x" ? "twitter" : platform;
+    const p = platform === "x" ? "twitter" : platform; // normalize X→twitter
 
     const usernames = usernameCandidates(rawHandle);
     if (!usernames.length) return null;
@@ -398,7 +400,7 @@ export default function PaymentsPage() {
                     <input
                       value={toValue}
                       onChange={(e) => setToValue(e.target.value)}
-                      placeholder="e.g. @Cookiestroke"
+                      placeholder="e.g. @alice"
                       className="w-full rounded-xl border px-3 py-2 pr-10"
                     />
                     {resolvedAddress && !resolving && (

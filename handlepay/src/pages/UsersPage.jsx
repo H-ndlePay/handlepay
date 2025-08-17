@@ -1,28 +1,17 @@
 // src/pages/UsersPage.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { graphClient } from "../lib/graphClient";
 import { MEMBERS, HANDLES_FOR_MEMBER } from "../lib/queries";
-import { User, AtSign, Search, Check } from "lucide-react";
+import { User, Search } from "lucide-react";
 import { createPublicClient, http } from "viem";
 import { mainnet } from "viem/chains";
 
+import { FaSquareXTwitter } from "react-icons/fa6";
+import { FaTelegramPlane, FaDiscord, FaInstagram } from "react-icons/fa";
+
 const ethClient = createPublicClient({ chain: mainnet, transport: http() });
 const DEBUG_ENS = false;
-
-// Blue circle + white check (Twitter/Instagram-style)
-function VerifiedBadge({ className = "" }) {
-  return (
-    <span
-      className={`inline-flex items-center justify-center rounded-full bg-sky-500 text-white align-middle ${className}`}
-      style={{ width: 14, height: 14 }}
-      title="Verified via ENS"
-      aria-label="Verified via ENS"
-    >
-      <Check className="w-[9px] h-[9px]" strokeWidth={3} />
-    </span>
-  );
-}
 
 // Normalize to bare username (no @, no links), lowercase
 function normalizeHandle(raw) {
@@ -32,15 +21,17 @@ function normalizeHandle(raw) {
   s = s.replace(/^https?:\/\/(www\.)?t\.me\//i, "");
   s = s.replace(/^t\.me\//i, "");
   s = s.replace(/^https?:\/\/(www\.)?(twitter|x)\.com\//i, "");
+  s = s.replace(/^https?:\/\/(www\.)?instagram\.com\//i, "");
   s = s.replace(/[\/#?].*$/, "");
   return s.toLowerCase();
 }
 
+const shortAddr = (a) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : "");
+
 export default function UsersPage() {
   const [users, setUsers] = useState([]);
-  const [platformFilter, setPlatformFilter] = useState("all"); // all|twitter|telegram
+  const [platformFilter, setPlatformFilter] = useState("all"); // all|twitter|telegram|discord|instagram
   const [query, setQuery] = useState("");
-  const navigate = useNavigate();
 
   useEffect(() => {
     async function load() {
@@ -54,9 +45,6 @@ export default function UsersPage() {
 
           let ensName = null;
           let ensAvatar = null;
-          let ensTwitterRaw = "";
-          let ensTelegramRaw = "";
-          let ensSocial = { twitter: "", telegram: "" };
 
           try {
             ensName = await ethClient.getEnsName({ address: m.wallet });
@@ -69,27 +57,7 @@ export default function UsersPage() {
             }
             if (ensName) {
               ensAvatar = await ethClient.getEnsAvatar({ name: ensName });
-              // Twitter standard key
-              ensTwitterRaw = await ethClient.getEnsText({
-                name: ensName,
-                key: "com.twitter",
-              });
-              // Telegram standard key (org.telegram); also check com.telegram as fallback
-              ensTelegramRaw =
-                (await ethClient.getEnsText({ name: ensName, key: "org.telegram" })) ||
-                (await ethClient.getEnsText({ name: ensName, key: "com.telegram" }));
-
-              ensSocial = {
-                twitter: normalizeHandle(ensTwitterRaw),
-                telegram: normalizeHandle(ensTelegramRaw),
-              };
-
-              if (DEBUG_ENS) {
-                console.log("Avatar:", ensAvatar || "(none)");
-                console.log("com.twitter:", ensTwitterRaw || "(none)");
-                console.log("org/com.telegram:", ensTelegramRaw || "(none)");
-                console.log("Normalized ENS socials:", ensSocial);
-              }
+              if (DEBUG_ENS) console.log("Avatar:", ensAvatar || "(none)");
             }
           } catch (e) {
             if (DEBUG_ENS) console.error("ENS lookup failed for", m.wallet, e);
@@ -102,7 +70,6 @@ export default function UsersPage() {
             handles: handleAddeds || [],
             ensName,
             ensAvatar,
-            ensSocial, // { twitter, telegram }
           };
         })
       );
@@ -125,7 +92,9 @@ export default function UsersPage() {
           const platformOk =
             platformFilter === "all" ||
             (platformFilter === "twitter" && (p === "twitter" || p === "x")) ||
-            (platformFilter === "telegram" && p === "telegram");
+            (platformFilter === "telegram" && p === "telegram") ||
+            (platformFilter === "discord" && p === "discord") ||
+            (platformFilter === "instagram" && p === "instagram");
           const queryOk = !q || uname.includes(q);
           return platformOk && queryOk;
         });
@@ -134,14 +103,87 @@ export default function UsersPage() {
       .filter((u) => u.handles.length > 0 || (platformFilter === "all" && !q));
   }, [users, platformFilter, query]);
 
+  // Platform row (ONLY @username navigates to payments)
+  function PlatformRow({ platformRaw, username }) {
+    const platform = String(platformRaw || "").toLowerCase();
+    const uname = normalizeHandle(username);
+
+    let Icon = null;
+    let label = platformRaw;
+    let externalUrl = null;
+    let externalText = null;
+
+    if (platform === "twitter" || platform === "x") {
+      Icon = FaSquareXTwitter;
+      externalUrl = `https://x.com/${encodeURIComponent(uname)}`;
+      externalText = "View on X";
+      label = "Twitter";
+    } else if (platform === "telegram") {
+      Icon = FaTelegramPlane;
+      externalUrl = `https://t.me/${encodeURIComponent(uname)}`;
+      externalText = "Chat on Telegram";
+      label = "Telegram";
+    } else if (platform === "discord") {
+      Icon = FaDiscord;
+      if (/^\d+$/.test(uname)) {
+        externalUrl = `https://discord.com/users/${uname}`;
+      } else {
+        externalUrl = `https://discord.com/app`;
+      }
+      externalText = "Message on Discord";
+      label = "Discord";
+    } else if (platform === "instagram") {
+      Icon = FaInstagram;
+      externalUrl = `https://instagram.com/${encodeURIComponent(uname)}`;
+      externalText = "View on Instagram";
+      label = "Instagram";
+    }
+
+    const paymentLink = `/payments?toType=${encodeURIComponent(platformRaw)}&toValue=${encodeURIComponent(
+      username
+    )}`;
+
+    return (
+      <li className="text-sm">
+        <div className="flex items-center gap-2 text-gray-700">
+          {Icon && <Icon className="h-4 w-4 text-gray-600 shrink-0" />}
+          <span className="font-medium capitalize">{label}</span>
+
+          {/* Clicking @username → Payments */}
+          <Link
+            to={paymentLink}
+            className="text-gray-600 hover:text-gray-900"
+            title="Pay this handle"
+          >
+            @{username}
+          </Link>
+
+          {/* External link (never triggers Payments) */}
+          {externalUrl && (
+            <a
+              href={externalUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              className="ml-auto text-[11px] text-sky-600 hover:text-sky-700"
+              title={externalText}
+            >
+              {externalText}
+            </a>
+          )}
+        </div>
+      </li>
+    );
+  }
+
   return (
     <main className="pt-24 pb-16 bg-gray-50 min-h-screen">
-      {/* Full-width container (no max-w cap) */}
       <div className="w-full max-w-none px-4 sm:px-6 lg:px-10 space-y-6">
         <h1 className="text-3xl font-bold text-gray-800">Member Directory</h1>
 
-        {/* 🔎 Search + Filter */}
-        <div className="flex flex-wrap gap-3 items-center">
+        {/* Search + Filter */}
+        <div className="flex items-center gap-3">
           <select
             value={platformFilter}
             onChange={(e) => setPlatformFilter(e.target.value)}
@@ -151,9 +193,12 @@ export default function UsersPage() {
             <option value="all">All</option>
             <option value="twitter">Twitter</option>
             <option value="telegram">Telegram</option>
+            <option value="discord">Discord</option>
+            <option value="instagram">Instagram</option>
           </select>
 
-          <div className="flex-1 min-w-[240px] relative">
+          {/* Full stretch search bar */}
+          <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <input
               value={query}
@@ -167,18 +212,14 @@ export default function UsersPage() {
           </div>
         </div>
 
-        {/* Responsive grid: full-width, scales up to 4 columns on xl */}
+        {/* Cards */}
         <div className="grid gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filtered.map((u) => {
-            const first = u.handles[0];
-            const defaultLink = first
-              ? `/payments?toType=${encodeURIComponent(first.platform)}&toValue=${encodeURIComponent(
-                  first.username
-                )}`
-              : null;
-
-            const Card = (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 hover:shadow-md transition">
+            return (
+              <div
+                key={u.memberId}
+                className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 hover:shadow-md transition"
+              >
                 {/* Header */}
                 <div className="flex items-center gap-3 mb-3">
                   {u.ensAvatar ? (
@@ -193,74 +234,27 @@ export default function UsersPage() {
                     </div>
                   )}
                   <div className="min-w-0">
-                    {u.ensName ? (
-                      <>
-                        <p className="font-medium text-gray-800 truncate">{u.ensName}</p>
-                        <p className="text-xs text-gray-500 truncate">{u.wallet}</p>
-                      </>
-                    ) : (
-                      <>
-                        <p className="text-sm text-gray-500">Wallet</p>
-                        <p className="font-mono text-sm text-gray-800 truncate">{u.wallet}</p>
-                      </>
-                    )}
+                    <p className="font-medium text-gray-800 truncate">
+                      {u.ensName || "Member"}
+                    </p>
+                    {/* ▼ Wallet address directly below the name */}
+                    <p className="font-mono text-xs text-gray-500 truncate">
+                      {shortAddr(u.wallet)}
+                    </p>
                   </div>
                 </div>
 
                 {/* Handles */}
                 {u.handles.length > 0 ? (
                   <ul className="space-y-2">
-                    {u.handles.map((h, i) => {
-                      const platform = String(h.platform || "").trim().toLowerCase();
-                      const uname = normalizeHandle(h.username);
-                      const key = platform === "x" ? "twitter" : platform;
-
-                      // Per-handle ENS match (badge shown only when usernames match)
-                      const isVerified =
-                        (key === "twitter" && u.ensSocial.twitter && uname === u.ensSocial.twitter) ||
-                        (key === "telegram" && u.ensSocial.telegram && uname === u.ensSocial.telegram);
-
-                      const to = `/payments?toType=${encodeURIComponent(h.platform)}&toValue=${encodeURIComponent(
-                        h.username
-                      )}`;
-
-                      return (
-                        <li key={i} className="text-sm">
-                          <Link
-                            to={to}
-                            className="flex items-center gap-2 text-gray-700 hover:text-gray-900 group"
-                            title="Send payment"
-                          >
-                            <AtSign className="h-4 w-4 text-gray-400 group-hover:text-gray-500" />
-                            {/* Platform name WITHOUT leading '@' */}
-                            <span className="font-medium capitalize">{h.platform}</span>
-                            {/* Keep @ for the username (remove this span to hide '@username') */}
-                            <span className="text-gray-600">@{h.username}</span>
-                            {isVerified && <VerifiedBadge className="ml-1" />}
-                          </Link>
-                        </li>
-                      );
-                    })}
+                    {u.handles.map((h, i) => (
+                      <PlatformRow key={i} platformRaw={h.platform} username={h.username} />
+                    ))}
                   </ul>
                 ) : (
                   <p className="text-sm text-gray-400 italic">No handles added yet</p>
                 )}
               </div>
-            );
-
-            return defaultLink ? (
-              <div
-                key={u.memberId}
-                role="button"
-                tabIndex={0}
-                onClick={() => navigate(defaultLink)}
-                onKeyDown={(e) => e.key === "Enter" && navigate(defaultLink)}
-                className="cursor-pointer"
-              >
-                {Card}
-              </div>
-            ) : (
-              <div key={u.memberId}>{Card}</div>
             );
           })}
         </div>
