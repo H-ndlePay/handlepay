@@ -13,6 +13,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Nav from "./components/Nav.jsx";
 import UsersPage from "./pages/UsersPage.jsx";
 import PaymentsPage from "./pages/PaymentsPage.jsx";
+import WaitlistPage from "./pages/WaitlistPage";
 
 const wagmiConfig = createConfig({
   chains: [mainnet, base], // ⬅ include all chains you’ll use
@@ -41,6 +42,7 @@ export default function App() {
               <Routes>
                 <Route path="/" element={<UsersPage />} />
                 <Route path="/payments" element={<PaymentsPage />} />
+                <Route path="/waitlist" element={<WaitlistPage />} />
               </Routes>
             </Router>
           </DynamicWagmiConnector>
