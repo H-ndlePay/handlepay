@@ -80,7 +80,7 @@ task('manage-member', 'Create a member and add handles; optional ETH payment')
           await r.addHandle.staticCall(
               memberId, platform, username);  // v6 static call
           const tx = await r.addHandle(memberId, platform, username);
-          await tx.wait(1);
+          await tx.wait(3);
           console.log('  added ✅');
         } else if (Number(taken) === memberId) {
           console.log(`Handle ${platform}:${
