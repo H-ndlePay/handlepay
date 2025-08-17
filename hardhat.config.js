@@ -1,6 +1,8 @@
 require("./tasks/manage-member");
 require("./tasks/pay-eth");
 require("./tasks/pay-usdc-xchain");
+require("./tasks/pay-usdc-extension");
+require("./tasks/debug-usdc-extension");
 require("@nomicfoundation/hardhat-toolbox");
 require("@nomicfoundation/hardhat-verify");
 require("dotenv").config();
