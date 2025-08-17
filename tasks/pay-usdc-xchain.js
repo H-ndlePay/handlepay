@@ -15,23 +15,17 @@ const REG_ABI = [
   'function getMemberByHandle(string platform,string username) view returns (tuple(uint256 id,address wallet,uint256 joinedBlock,bool isActive))',
 ];
 
-// CCTP v2 TokenMessenger + hooks + finality (same on EVMs)
-const TOKEN_MESSENGER_V2_ABI = [
-  'function depositForBurn(uint256 amount,uint32 destinationDomain,bytes32 mintRecipient,address burnToken,bytes32 destinationCaller,uint256 maxFee,uint32 minFinalityThreshold) external',
-  'function depositForBurnWithHook(uint256 amount,uint32 destinationDomain,bytes32 mintRecipient,address burnToken,bytes32 destinationCaller,uint256 maxFee,uint32 minFinalityThreshold,bytes hookData) external',
+// CCTP TokenMessenger ABI (standard depositForBurn)
+const TOKEN_MESSENGER_ABI = [
+  'function depositForBurn(uint256 amount,uint32 destinationDomain,bytes32 mintRecipient,address burnToken) external returns (uint64)',
 ];
 
-// Your hook receiver interface (destination side)
-const RECEIVER_ABI = [
-  'function mintAndLog(bytes message, bytes attestation) external',
-];
-
-// v2 transmitter (same on EVMs)
-const MESSAGE_TRANSMITTER_V2_ABI = [
+// Message Transmitter ABI
+const MESSAGE_TRANSMITTER_ABI = [
   'function receiveMessage(bytes message, bytes attestation) external returns (bool)',
 ];
 
-// CCTP v2 domains
+// CCTP domains
 const DOMAINS = {
   ethereum: 0,
   avalanche: 1,
@@ -64,19 +58,9 @@ const USDC = {
   linea: '0x176211869ca2b568f2a7d4ee941e073a821ee1ff',
 };
 
-// CCTP v2 contract addresses (same on supported EVMs)
-const TOKEN_MESSENGER_V2 = '0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d';
-const MESSAGE_TRANSMITTER_V2 = '0x81D40F21F12A8F0E3252Bccb954D722d4c464B64';
-
-// YOUR deployed hook receiver contracts (per destination chain)
-// Add your hook receiver addresses here as you deploy them
-const DST_HOOK = {
-  ethereum: '0x26447a80c4F6b74AC77Fb14Da30b45a9D8fc0662',
-  base: '0x1f184E5CC0EDE2eFd67a3cE51dB1347A2C3dC1c8',
-  // Add more chains as needed:
-  // arbitrum: '0x...',
-  // op: '0x...',
-};
+// CCTP contract addresses (same on all supported chains)
+const TOKEN_MESSENGER = '0xBd3fa81B58Ba92a82136038B25aDec7066af3155';
+const MESSAGE_TRANSMITTER = '0x0a992d191DEeC32aFe36203Ad87D7d289a738F81';
 
 // Utility functions
 function req(x, m) {
@@ -84,20 +68,12 @@ function req(x, m) {
   return x;
 }
 
-function leftPadAddrToBytes32(ethers, addr) {
+function addressToBytes32(ethers, addr) {
   // bytes32 with address in the LOW 20 bytes (left-padded with zeros)
   return ethers.hexlify(ethers.zeroPadValue(ethers.getAddress(addr), 32));
 }
 
-function bytes32Low20ToAddr(ethers, b32) {
-  return ethers.getAddress('0x' + b32.slice(-40));
-}
-
-function isZeroBytes32(hex) {
-  return /^0x0{64}$/i.test(hex);
-}
-
-task('pay-usdc-xchain', 'Cross-chain USDC transfer using CCTP v2 with hooks')
+task('pay-usdc-xchain', 'Cross-chain USDC transfer using CCTP')
     .addParam(
         'src',
         'Source chain (ethereum|base|arbitrum|op|polygon|avalanche|linea)')
@@ -112,14 +88,9 @@ task('pay-usdc-xchain', 'Cross-chain USDC transfer using CCTP v2 with hooks')
     .addOptionalParam(
         'resolveRpc', 'RPC for handle resolution', 'https://mainnet.base.org')
     .addOptionalParam('pk', 'Private key hex (no 0x prefix)')
-    .addOptionalParam(
-        'minFinality', 'Finality: 1000=Fast, 2000=Finalized', '1000')
     .addOptionalParam('srcRpc', 'Override source chain RPC')
     .addOptionalParam('dstRpc', 'Override destination chain RPC')
     .addOptionalParam('tx', 'Resume with existing burn tx hash')
-    .addOptionalParam(
-        'hookData', 'Custom hook data (0x...); auto-generated if omitted')
-    .addFlag('noHook', 'Use classic depositForBurn without hooks')
     .setAction(async (args, hre) => {
       const {ethers} = hre;
 
@@ -190,87 +161,34 @@ task('pay-usdc-xchain', 'Cross-chain USDC transfer using CCTP v2 with hooks')
       const amount = ethers.parseUnits(args.amount, decimals);
       console.log(`   Amount: ${args.amount} USDC`);
 
-      const messenger = new ethers.Contract(
-          TOKEN_MESSENGER_V2, TOKEN_MESSENGER_V2_ABI, srcSigner);
+      const messenger =
+          new ethers.Contract(TOKEN_MESSENGER, TOKEN_MESSENGER_ABI, srcSigner);
       const transmitter = new ethers.Contract(
-          MESSAGE_TRANSMITTER_V2, MESSAGE_TRANSMITTER_V2_ABI, dstSigner);
+          MESSAGE_TRANSMITTER, MESSAGE_TRANSMITTER_ABI, dstSigner);
 
       // Step 3: Either resume existing burn or create new one
-      const minFinality = parseInt(args.minFinality || '1000', 10);
       let burnTxHash = args.tx;
 
       if (!burnTxHash) {
         console.log(`\n🔥 Initiating burn on ${srcKey}...`);
 
-        // Fetch fee from Circle API
-        const feeUrl = `https://iris-api.circle.com/v2/burn/USDC/fees/${
-            srcDomain}/${dstDomain}`;
-        const feeRes = await fetch(feeUrl);
-        if (!feeRes.ok) throw new Error(`Fee API failed: ${feeRes.status}`);
-
-        const feeData = await feeRes.json();
-        const minFeeBps = BigInt(feeData?.data?.minimumFee ?? 0n);
-        const maxFee = (amount * minFeeBps) / 10000n;
-        console.log(`   Fee: ${minFeeBps} bps → max ${
-            ethers.formatUnits(maxFee, decimals)} USDC`);
-
         // Check and approve USDC
         const owner = await srcSigner.getAddress();
-        const allowance = await usdc.allowance(owner, TOKEN_MESSENGER_V2);
+        const allowance = await usdc.allowance(owner, TOKEN_MESSENGER);
         if (allowance < amount) {
           console.log(`   Approving USDC...`);
-          const approveTx = await usdc.approve(TOKEN_MESSENGER_V2, amount);
+          const approveTx = await usdc.approve(TOKEN_MESSENGER, amount);
           console.log(`   Approval tx: ${approveTx.hash}`);
           await approveTx.wait();
         }
 
-        // Prepare mint recipient (always the final recipient address)
-        const mintRecipient32 = leftPadAddrToBytes32(ethers, recipient);
+        // Prepare mint recipient
+        const mintRecipient32 = addressToBytes32(ethers, recipient);
 
         // Execute burn transaction
-        let burnTx;
-        if (args.noHook) {
-          // Classic burn without hooks
-          console.log(`   Executing depositForBurn (no hooks)...`);
-          burnTx = await messenger.depositForBurn(
-              amount, dstDomain, mintRecipient32, usdcSrc,
-              ethers.ZeroHash,  // No destination caller
-              maxFee, minFinality);
-        } else {
-          // Burn with hooks
-          const hookReceiver = DST_HOOK[dstKey];
-          if (!hookReceiver) {
-            throw new Error(
-                `No hook receiver configured for ${dstKey}. ` +
-                `Deploy a hook receiver contract first or use --noHook flag.`);
-          }
-
-          const destinationCaller32 =
-              leftPadAddrToBytes32(ethers, hookReceiver);
-
-          // Build hook data if not provided
-          let hookData = args.hookData;
-          if (!hookData) {
-            if (!args.platform || !args.username) {
-              // Create minimal hook data if no handle info
-              hookData = new ethers.AbiCoder().encode(
-                  ['string', 'uint256'], ['XFER', amount]);
-            } else {
-              // Create full hook data with handle info
-              hookData = new ethers.AbiCoder().encode(
-                  ['string', 'string', 'string', 'uint256'],
-                  ['HPAY', args.platform, args.username, amount]);
-            }
-          }
-
-          console.log(`   Hook receiver: ${hookReceiver}`);
-          console.log(`   Hook data size: ${(hookData.length - 2) / 2} bytes`);
-          console.log(`   Executing depositForBurnWithHook...`);
-
-          burnTx = await messenger.depositForBurnWithHook(
-              amount, dstDomain, mintRecipient32, usdcSrc, destinationCaller32,
-              maxFee, minFinality, hookData);
-        }
+        console.log(`   Executing depositForBurn...`);
+        const burnTx = await messenger.depositForBurn(
+            amount, dstDomain, mintRecipient32, usdcSrc);
 
         console.log(`   Burn tx: ${burnTx.hash}`);
         await burnTx.wait();
@@ -285,8 +203,8 @@ task('pay-usdc-xchain', 'Cross-chain USDC transfer using CCTP v2 with hooks')
       console.log(
           `   (This typically takes 10-20 minutes. Press Ctrl+C to abort)`);
 
-      const attestationUrl = `https://iris-api.circle.com/v2/messages/${
-          srcDomain}?transactionHash=${burnTxHash}`;
+      const attestationUrl =
+          `https://iris-api.circle.com/attestations/${srcDomain}/${burnTxHash}`;
       let message, attestation;
       const startTime = Date.now();
       const pollInterval = 5000;  // 5 seconds
@@ -295,38 +213,25 @@ task('pay-usdc-xchain', 'Cross-chain USDC transfer using CCTP v2 with hooks')
       while (true) {
         try {
           const response = await fetch(attestationUrl);
-          if (!response.ok) {
-            console.log(`   API error (${response.status}), retrying...`);
-          } else {
+          if (response.ok) {
             const data = await response.json();
-            const msg = (data.messages || [])[0] || {};
-            const att = msg.attestation;
-            const msgHex = msg.message;
-
-            // Determine status
-            let status;
-            if (!att) {
-              status = 'WAITING';
-            } else if (att === 'PENDING') {
-              status = 'PENDING';
-            } else if (att && msgHex && msgHex !== '0x') {
-              status = 'READY';
-            } else {
-              status = 'PROCESSING';
-            }
-
-            // Update status if changed
-            if (status !== lastStatus) {
-              const elapsed = Math.floor((Date.now() - startTime) / 1000);
-              console.log(`   Status: ${status} (${elapsed}s elapsed)`);
-              lastStatus = status;
-            }
-
-            // Check if ready
-            if (status === 'READY') {
-              message = msgHex;
-              attestation = '0x' + att.replace(/^0x/, '');
+            if (data.status === 'complete') {
+              message = data.message;
+              attestation = data.attestation;
               break;
+            } else if (data.status !== lastStatus) {
+              const elapsed = Math.floor((Date.now() - startTime) / 1000);
+              console.log(`   Status: ${data.status || 'pending'} (${
+                  elapsed}s elapsed)`);
+              lastStatus = data.status;
+            }
+          } else if (response.status === 404) {
+            // Transaction not found yet
+            if (lastStatus !== 'waiting') {
+              const elapsed = Math.floor((Date.now() - startTime) / 1000);
+              console.log(
+                  `   Status: waiting for indexing (${elapsed}s elapsed)`);
+              lastStatus = 'waiting';
             }
           }
         } catch (error) {
@@ -339,67 +244,19 @@ task('pay-usdc-xchain', 'Cross-chain USDC transfer using CCTP v2 with hooks')
       const attestationTime = Math.floor((Date.now() - startTime) / 1000);
       console.log(`   ✅ Attestation received (${attestationTime}s)`);
 
-      // Step 5: Determine if we need to use hooks for minting
-      console.log(`\n🔍 Processing message for ${dstKey}...`);
-
-      // Decode message header to check for destination caller
-      const coder = new ethers.AbiCoder();
-      const header = coder.decode(
-          [
-            'uint32', 'uint32', 'uint32', 'bytes32', 'bytes32', 'bytes32',
-            'bytes32'
-          ],
-          message.slice(0, 228)  // First 228 bytes contain the header
-      );
-
-      // Check if hooks are configured for this destination
-      const configuredHook = DST_HOOK[dstKey];
-      let useHook = false;
-      let hookContract = null;
-
-      if (!args.noHook && configuredHook) {
-        // Verify the hook contract exists
-        try {
-          const hookCode = await dstProvider.getCode(configuredHook);
-          if (hookCode && hookCode !== '0x' && hookCode !== '0x0') {
-            useHook = true;
-            hookContract = configuredHook;
-            console.log(`   Using hook receiver: ${hookContract}`);
-          } else {
-            console.log(`   ⚠️  Hook configured but no contract found at ${
-                configuredHook}`);
-            console.log(`   Falling back to direct mint`);
-          }
-        } catch (e) {
-          console.log(`   ⚠️  Error checking hook contract: ${e.message}`);
-          console.log(`   Falling back to direct mint`);
-        }
-      }
-
-      // Step 6: Finalize on destination chain
+      // Step 5: Finalize on destination chain
       console.log(`\n💎 Finalizing on ${dstKey}...`);
 
       try {
-        if (useHook && hookContract) {
-          // Use hook receiver to mint
-          const receiver =
-              new ethers.Contract(hookContract, RECEIVER_ABI, dstSigner);
-          console.log(`   Calling mintAndLog on hook receiver...`);
-          const mintTx = await receiver.mintAndLog(message, attestation);
-          console.log(`   Mint tx: ${mintTx.hash}`);
-          await mintTx.wait();
-        } else {
-          // Direct mint via message transmitter
-          console.log(`   Calling receiveMessage on transmitter...`);
-          const mintTx = await transmitter.receiveMessage(message, attestation);
-          console.log(`   Mint tx: ${mintTx.hash}`);
-          await mintTx.wait();
-        }
+        console.log(`   Calling receiveMessage...`);
+        const mintTx = await transmitter.receiveMessage(message, attestation);
+        console.log(`   Mint tx: ${mintTx.hash}`);
+        await mintTx.wait();
 
         console.log(`\n✅ Success! ${args.amount} USDC transferred to ${
             recipient} on ${dstKey}`);
 
-        // Check final balance if possible
+        // Check final balance
         try {
           const dstUsdc = ethers.getAddress(USDC[dstKey]);
           const dstUsdcContract =
@@ -408,14 +265,31 @@ task('pay-usdc-xchain', 'Cross-chain USDC transfer using CCTP v2 with hooks')
           console.log(`   Recipient balance: ${
               ethers.formatUnits(finalBalance, decimals)} USDC`);
         } catch (e) {
-          // Balance check is optional, don't fail if it doesn't work
+          // Balance check is optional
         }
 
       } catch (error) {
-        // Check if the message was already processed
-        if (error.message && error.message.includes('already processed')) {
+        if (error.message &&
+            (error.message.includes('already executed') ||
+             error.message.includes('Already executed') ||
+             error.message.includes('message has already been received') ||
+             error.message.includes('Nonce already used'))) {
           console.log(`\n✅ Message already processed. Transfer complete.`);
+
+          // Try to check balance anyway
+          try {
+            const dstUsdc = ethers.getAddress(USDC[dstKey]);
+            const dstUsdcContract =
+                new ethers.Contract(dstUsdc, IERC20_ABI, dstProvider);
+            const finalBalance = await dstUsdcContract.balanceOf(recipient);
+            console.log(`   Recipient balance: ${
+                ethers.formatUnits(finalBalance, decimals)} USDC`);
+          } catch (e) {
+            // Balance check is optional
+          }
         } else {
+          console.log(`\n❌ Failed to finalize transfer`);
+          console.log(`   Error: ${error.message || error}`);
           throw error;
         }
       }
